@@ -1,55 +1,69 @@
 import React, { useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import confetti from 'canvas-confetti';
 import { DOCTORS } from '../data/healthcareData';
+import { bookAppointmentAsync } from '../store/appointmentsSlice';
 import { 
   Calendar, 
   Clock, 
   Video, 
   MapPin, 
   CheckCircle2, 
-  User, 
-  Phone, 
-  Mail, 
-  FileText,
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 
 export default function BookAppointment() {
   const location = useLocation();
+  const dispatch = useDispatch();
+
   const preSelectedDoc = location.state?.doctor || DOCTORS[0];
+  const authUser = useSelector((state) => state.auth.user);
+  const bookingStatus = useSelector((state) => state.appointments.bookingStatus);
+  const bookingError = useSelector((state) => state.appointments.bookingError);
 
   const [selectedDoc, setSelectedDoc] = useState(preSelectedDoc);
   const [consultType, setConsultType] = useState('VIDEO');
-  const [selectedDate, setSelectedDate] = useState('Today, Sep 9');
+  const [selectedDate, setSelectedDate] = useState('Today, Sep 19');
   const [selectedTime, setSelectedTime] = useState('10:30 AM');
-  const [patientName, setPatientName] = useState('');
-  const [patientPhone, setPatientPhone] = useState('');
+  const [patientName, setPatientName] = useState(authUser?.name || 'Sarah Jenkins');
+  const [patientPhone, setPatientPhone] = useState('+1 (555) 019-2834');
   const [symptoms, setSymptoms] = useState('');
-  const [isConfirmed, setIsConfirmed] = useState(false);
-  const [bookingId, setBookingId] = useState('');
+  const [confirmedAppointment, setConfirmedAppointment] = useState(null);
 
-  const handleConfirmBooking = (e) => {
+  const handleConfirmBooking = async (e) => {
     e.preventDefault();
     if (!patientName || !patientPhone) return;
 
-    const id = `APT-${Math.floor(100000 + Math.random() * 900000)}`;
-    setBookingId(id);
-    setIsConfirmed(true);
+    const payload = {
+      doctor: selectedDoc,
+      date: selectedDate,
+      timeSlot: selectedTime,
+      consultationType: consultType === 'VIDEO' ? 'HD Video Consult' : 'In-Clinic Visit',
+      patientName,
+      patientPhone,
+      symptoms
+    };
 
-    try {
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 }
-      });
-    } catch (err) {
-      console.log(err);
+    const resultAction = await dispatch(bookAppointmentAsync(payload));
+    if (bookAppointmentAsync.fulfilled.match(resultAction)) {
+      setConfirmedAppointment(resultAction.payload);
+      try {
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 }
+        });
+      } catch (err) {
+        console.log(err);
+      }
     }
   };
 
-  if (isConfirmed) {
+  if (confirmedAppointment) {
     return (
       <div className="max-w-xl mx-auto py-12 px-4 text-center space-y-6">
         <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-950 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-lg">
@@ -58,7 +72,7 @@ export default function BookAppointment() {
 
         <div className="space-y-2">
           <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 text-xs font-bold uppercase tracking-wider">
-            Appointment Confirmed
+            Optimistically Preserved in Redux Toolkit
           </span>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
             Virtual Consultation Scheduled!
@@ -68,23 +82,23 @@ export default function BookAppointment() {
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 text-left text-xs space-y-3 shadow-sm">
           <div className="flex justify-between border-b pb-2.5 font-semibold">
             <span className="text-slate-400">Booking ID:</span>
-            <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{bookingId}</span>
+            <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{confirmedAppointment.id}</span>
           </div>
           <div className="flex justify-between border-b pb-2.5">
             <span className="text-slate-400">Doctor:</span>
-            <span className="font-bold text-slate-900 dark:text-white">{selectedDoc.name}</span>
+            <span className="font-bold text-slate-900 dark:text-white">{confirmedAppointment.doctorName}</span>
           </div>
           <div className="flex justify-between border-b pb-2.5">
             <span className="text-slate-400">Specialty:</span>
-            <span>{selectedDoc.specialty}</span>
+            <span>{confirmedAppointment.specialty}</span>
           </div>
           <div className="flex justify-between border-b pb-2.5">
             <span className="text-slate-400">Date &amp; Time:</span>
-            <span className="font-bold text-slate-900 dark:text-white">{selectedDate} at {selectedTime}</span>
+            <span className="font-bold text-slate-900 dark:text-white">{confirmedAppointment.date} at {confirmedAppointment.timeSlot}</span>
           </div>
           <div className="flex justify-between border-b pb-2.5">
             <span className="text-slate-400">Consultation Mode:</span>
-            <span className="font-bold text-emerald-600">{consultType === 'VIDEO' ? 'HD Video Telehealth' : 'In-Person Clinic Visit'}</span>
+            <span className="font-bold text-emerald-600">{confirmedAppointment.consultationType}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-400">Patient:</span>
@@ -92,16 +106,16 @@ export default function BookAppointment() {
           </div>
         </div>
 
-        {consultType === 'VIDEO' && (
+        {consultType === 'VIDEO' && confirmedAppointment.meetingUrl && (
           <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs text-left space-y-2">
             <div className="font-bold text-emerald-800 dark:text-emerald-200 flex items-center gap-1.5">
               <Video className="w-4 h-4 text-emerald-600" /> Virtual Meeting Link Pinned
             </div>
             <p className="text-slate-600 dark:text-slate-300 text-[11px]">
-              Your secure encrypted video consultation room is ready. Access details have been sent via SMS to {patientPhone}.
+              Your encrypted HD video consultation room is ready. Access details have been dispatched to {patientPhone}.
             </p>
             <div className="font-mono text-[11px] bg-white dark:bg-slate-900 p-2 rounded border text-emerald-600 font-bold truncate">
-              https://telehealth.medipulse.org/room/{bookingId.toLowerCase()}
+              {confirmedAppointment.meetingUrl}
             </div>
           </div>
         )}
@@ -122,12 +136,19 @@ export default function BookAppointment() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
       <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-1">
         <div className="text-[10px] sm:text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" /> Telehealth &amp; Clinic Booking Portal
+          <ShieldCheck className="w-4 h-4 text-emerald-600" /> Redux Toolkit AsyncThunks • Booking Gateway
         </div>
         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
           Book Doctor Consultation
         </h1>
       </div>
+
+      {bookingError && (
+        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{bookingError}</span>
+        </div>
+      )}
 
       <form onSubmit={handleConfirmBooking} className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
         {/* Step 1: Select Doctor & Type */}
@@ -187,7 +208,7 @@ export default function BookAppointment() {
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Select Date &amp; Time Slot</label>
             <div className="grid grid-cols-2 gap-2 mb-3">
-              {['Today, Sep 9', 'Tomorrow, Sep 10'].map((d) => (
+              {['Today, Sep 19', 'Tomorrow, Sep 20'].map((d) => (
                 <button
                   type="button"
                   key={d}
@@ -234,7 +255,7 @@ export default function BookAppointment() {
                 required
                 value={patientName}
                 onChange={(e) => setPatientName(e.target.value)}
-                placeholder="e.g. John Doe"
+                placeholder="e.g. Sarah Jenkins"
                 className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-600"
               />
             </div>
@@ -273,10 +294,20 @@ export default function BookAppointment() {
 
           <button
             type="submit"
-            className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase shadow-md transition-all flex items-center justify-center space-x-2 active:scale-95"
+            disabled={bookingStatus === 'loading'}
+            className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase shadow-md transition-all flex items-center justify-center space-x-2 active:scale-95 disabled:opacity-50"
           >
-            <span>CONFIRM &amp; BOOK NOW</span>
-            <ArrowRight className="w-4 h-4" />
+            {bookingStatus === 'loading' ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>SYNCING WITH REDUX THUNK...</span>
+              </>
+            ) : (
+              <>
+                <span>CONFIRM &amp; BOOK NOW</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </div>
       </form>

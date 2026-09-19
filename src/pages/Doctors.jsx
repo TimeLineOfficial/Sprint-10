@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SPECIALTIES, DOCTORS } from '../data/healthcareData';
 import { DoctorCard } from '../components/DoctorCard';
-import { Search, Filter, X, ChevronDown, ShieldCheck, Stethoscope } from 'lucide-react';
+import { useGetDoctorsQuery } from '../store/doctorsApi';
+import { Search, Filter, X, ChevronDown, ShieldCheck, RefreshCw } from 'lucide-react';
 
 export default function Doctors() {
   const location = useLocation();
@@ -14,13 +15,11 @@ export default function Doctors() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
-  const filteredDoctors = useMemo(() => {
-    return DOCTORS.filter((doc) => {
-      const matchesSpec = selectedSpecialty === 'All' || doc.specialty === selectedSpecialty;
-      const matchesSearch = !searchQuery || doc.name.toLowerCase().includes(searchQuery.toLowerCase()) || doc.hospital.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSpec && matchesSearch;
-    });
-  }, [selectedSpecialty, searchQuery]);
+  // RTK Query hook consuming cached store data
+  const { data: doctors = [], isLoading, isFetching } = useGetDoctorsQuery({
+    specialty: selectedSpecialty === 'All' ? undefined : selectedSpecialty,
+    search: searchQuery
+  });
 
   const handleSelectDoctor = (doctor) => {
     navigate('/book-appointment', { state: { doctor } });
@@ -32,10 +31,11 @@ export default function Doctors() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
         <div>
           <div className="text-[10px] sm:text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Board-Certified Medical Directory
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> RTK Query Cached Directory
+            {isFetching && <RefreshCw className="w-3 h-3 animate-spin text-emerald-600" />}
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
-            Find &amp; Book Specialists ({filteredDoctors.length})
+            Find &amp; Book Specialists ({doctors.length})
           </h1>
         </div>
 
@@ -159,12 +159,21 @@ export default function Doctors() {
         </div>
       )}
 
-      {/* Doctor Grid - 2 columns on Mobile */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
-        {filteredDoctors.map((doc) => (
-          <DoctorCard key={doc.id} doctor={doc} onSelectDoctor={handleSelectDoctor} />
-        ))}
-      </div>
+      {/* Loading Skeleton */}
+      {isLoading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+          {[1, 2, 3, 4, 5, 6].map((n) => (
+            <div key={n} className="h-64 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        /* Doctor Grid - 2 columns on Mobile */
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+          {doctors.map((doc) => (
+            <DoctorCard key={doc.id} doctor={doc} onSelectDoctor={handleSelectDoctor} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
